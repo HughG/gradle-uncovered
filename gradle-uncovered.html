@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Gradle Uncovered</title>
+    <meta charset="utf-8">
+    <style>
+      @import url(https://fonts.googleapis.com/css?family=Fira+Mono|Merriweather:300|Open+Sans);
+
+      body {
+        font-family: 'Merriweather', serif;
+      }
+      body.remark-container {
+        background: #fff;
+        color: #222;
+      }
+      a:link { color: #44C; }
+      a:hover { color: #66C; }
+      a:visited { color: #A4A; }
+      .footnote {
+        position: absolute;
+        font-size: smaller;
+        bottom: 3em;
+        right: 1.5em;
+      }
+      .remark-slide-scaler {
+          transform-origin: top-left;
+          -moz-box-shadow: 0 0 30px #222;
+          -webkit-box-shadow: 0 0 30px #222;
+          box-shadow: 0 0 30px #222;
+      }
+      .remark-slide-content {
+        background: #ddd;
+      }
+      h1, h2, h3, h4 {
+        font-family: 'Open Sans', sans-serif;
+        font-weight: bold;
+      }
+      *:link { color: #33d; }
+      a:hover { color: #55d; }
+      *:visited { color: #d3d; }
+      .remark-code, .remark-inline-code {
+        background: #fff;
+        font-family: 'Fira Mono', monospace;
+        border-radius: 5px;
+        padding: .5em;
+      }
+      .remark-inline-code {
+        background: #eee;
+        border-radius: 5px;
+        padding: 0.075em 0.2em;
+      }
+      .remark-code-span-highlighted {
+        background-color: rgba(255, 255, 0, 0.35);
+        border-radius: 5px;
+        border: 1.5px solid #BB0;
+      }
+      .remark-code-line-highlighted {
+        background-color: rgba(255, 255, 0, 0.35);
+        border-width: 0px 2px;
+        border-style: solid;
+        border-color: #BB0;
+      }
+      .remark-notes-area .remark-inline-code {
+        color: #000;
+      }
+      /* Two-column layout */
+      .left-column {
+        color: #888;
+        width: 20%;
+        height: 92%;
+        float: left;
+      }
+      /*
+      .left-column h3 {
+        margin: 0.5em 0em 0em 0.5em;
+        font-size: 120%;
+      }
+      .left-column h4 {
+        margin: 0.5em 0em 0em 1.5em;
+        font-size: 100%;
+      }
+      */
+      .left-column .current {
+        color: #ddd;
+      }
+      .right-column {
+        width: 75%;
+        float: right;
+        /*padding-top: 1em;*/
+      }
+      .clear {
+        clear: both;
+      }
+    </style>
+  </head>
+  <body>
+    <textarea id="source" style="display: none">
+
+class: center, middle
+
+# Gradle Uncovered
+
+## Why you might care about Gradle <br /> even if you never use it
+
+### Hugh Greene <githugh@tameter.org> <br /> April 2022
+
+.footnote[Presentation made with [remarkjs](https://remarkjs.com/).]
+
+???
+
+... Notes go here.
+
+---
+
+# Gradle Uncovered
+
+[Gradle](https://gradle.org/) is a software build tool which has many years of deep thought put into it.
+
+Even if you never use it, you could learn from some of its ideas.
+
+This presentation is based on Gradle 7.4.2.
+
+---
+
+# The Basics: Input, <u>Process</u>, Output
+
+You use Gradle by asking it to execute one or more tasks, which can depend on each other in various ways.
+
+Given a declaration of tasks a, b, and c ...
+
+* `gradlew a` will just run a.
+
+* `gradlew a b c` will run a, b, and c in parallel, up to a configurable limit.
+
+* `a.dependsOn b; b.dependsOn c` &rArr; `gradlew a` will run c, then b, then a.
+
+* `a.dependsOn b; a.finalizedBy c;` &rArr; `gradlew a` will run b, then a, then c.
+
+* `a.dependsOn c; b.mustRunAfter c;` &rArr;
+
+  * `gradlew a` will run a, then c, but not b because we didn't request it; and
+
+  * `gradlew a b` will run a, then c, then b.
+
+* `shouldRunAfter` is a weaker version of `mustRunAfter`: allows cycles and early parallel execution.
+
+---
+
+# The Basics: <u>Input</u>, Process, <u>Output</u>
+
+Tasks have named inputs and outputs (or "destroyables", if they delete things):
+
+* `Serializable` values including strings
+* folders, files, or file trees (as `String`, `File`, `Path`, file `URL`/`URI`, or lazy collections)
+* for inputs, the outputs of another task
+* collections of the above
+* functions/lambdas/closures returning the above, for lazy evaluation
+
+Caches up-to-date-ness of outputs/destroyables when a task runs, for a given input state.
+
+On later runs, if inputs are unchanged, tasks don't run.
+
+Persistent Gradle Daemon watches relevant parts of the filesystem between runs, to speed up checks.
+
+Lazy evaluation &rArr; Doesn't check inputs unless the task is selected to run.
+
+---
+
+# Extensibility
+
+Many build tools use config files plus pseudo- or home-grown languages.
+
+Gradle is a very rich build framework, usable and extensible with real programming languages.
+
+* Build scripts in dynamic (Groovy) or static (Kotlin) languages
+
+* Extensible with plugins in dynamic (Groovy) or static (Kotlin, Java) languages
+
+* Extensions can be
+
+  * as part of your build script
+
+  * in a special `buildSrc` pre-built project, implicitly used by all your scripts
+
+  * in a separate source repo, using composite builds (see later)
+
+  * published as JARs on the Internet and/or somewhere like Artifactory
+
+**WARNING:** With great power comes great responsiblity.
+
+???
+
+I've felt the pain of trying to heavily customise Ant and MSBuild builds!
+
+---
+
+# Build Isolation
+
+Gradle is normally used via the Gradle Wrapper, checked in to source control with your project.
+
+This is a combination of
+
+* `gradlew` script (DOS, PowerShell, and Unix sh),
+* small JAR file (about 55KB), and
+* small `.properties` file with the URL of the full Gradle version
+
+which bootstraps the full Gradle tool.
+
+Get your *build tools* as Gradle dependencies and your whole build is isolated,  
+so you can switch between check-outs and braches with no hassles.
+
+(Like Python virtualenv, or the Nix package manager for *nix.)
+
+???
+
+The script finds Java (usually via `JAVA_HOME`) and launches the JAR, which reads the properties.
+It then downloads the full version of Gradle plus its dependencies and runs that.
+
+So, you can build multiple projects using different versions of Gradle, with no conflicts.
+
+* If they need different versions of Java, you do need some initial script to start an environment with the right `JAVA_HOME`.
+
+* You can use different versions of the JDK for the wrapper launch itself, for running the Daemon, and for building Java projects.
+
+If you use Gradle to manage your *build tools* as dependencies, then you don't need to install them globally, so your whole build can be isolated!  (Like Python virtualenv, or the Nix package manager for *nix.)
+
+---
+
+# Build Cache
+
+Share built outputs between multiple checkouts or users, keyed by input state.
+
+* Single-user: Local directory (with auto-clean-up).
+
+* Multi-user: HTTP(S) (with Docker image for a simple implementation).
+
+  * Can have nightly CI build pre-populate the cache.
+
+* Both (in case you're working on a branch not built on CI).
+
+* Write your own!
+
+Configure task cacheability.
+
+* Define or wrap tasks as cacheable; e.g., `npm run bundle`.
+
+* Discard internal incremental build state populating output from cache; e.g., running a compiler.
+
+???
+
+Like IncrediBuild in reverse :-)
+
+---
+
+# Dependency Management
+
+A key feature is downloading versioned dependencies (JAR, ZIP, etc.) from repositories.
+
+* Gets transitive dependencies recursively (unless disabled for some modules).
+
+* HTTP(S) or `file:` repositories.
+
+* Can restrict certain modules to come from certain repositories.
+
+* Can get essential files from one repository but metadata from another.
+
+  * Useful if published veersion has incorrect metadata.
+
+  * You can also override specific metadata just within your build.
+
+---
+
+# Dependency Version Selection
+
+Declare versions in various ways
+
+* literal value: `1.2.5`
+* dynamic (prefix match): `1.2.+`
+* changing/snapshot
+* range: `[1.1, 2.0)`
+* latest of a given Ivy XML `status` (`release`, `integration`, ...)
+
+Write your own rules to select versions.
+
+* "Latest with a given Ivy XML `branch` value."
+
+Write your own rules to substitute dependencies.
+
+* "Module X was taken over by another organisation and renamed to XYZ."
+
+???
+
+Floating means "pick the latest version with this prefix".  Changing means the same version string may provide different artifacts at different times.
+
+---
+
+# Dependency Version Restriction
+
+Matching with varying strictness
+
+* greater-than-or-equal: the default
+* exact, else fail: can set this as default
+* reject specific versions: e.g., ones with a bug or vulnerability
+
+"Platforms" to use published sets of versions known to work well together.
+
+"Capabilities" to declare that modules provide conflicting implementations of the same interfaces.
+
+"Catalogs" to declare specific versions to use across multiple projects which are built together.
+
+---
+
+# Dependency Cache
+
+Downloaded files are stored in a configurable folder.
+
+* Clean handling of partial downloads.
+
+* Stored by hash in case remote files change.
+
+  * Supply-chain attacks: hashes can be verified against checked-in known-good values.
+
+* Auto-clean-up after 30 days.
+
+* Can have a second-layer, read-only cache shared between machines.
+
+  * Populate with regular CI build.
+
+---
+
+# Artifact transforms
+
+Request a module in a different format and have Gradle create that on the fly, e.g.,
+
+* Unzip
+
+* Minify
+
+None provided; have to write your own.
+
+Advanced features:
+
+* Automatic chaining.
+
+* Incremental transforms (for when input only partly changed)
+
+---
+
+# Slicing and dicing
+
+Projects have configurations: name subsets of their dependencies and published outputs.
+
+* Java Library example
+
+  * `api`: dependencies whose types are exposed in your own project's public API
+
+  * `implementation`: dependencies only used privately within your project
+
+  * `compileOnly`: dependencies which will be provided externally at runtime
+
+  * `runtimeOnly`: dependencies used only for side-effects at runtime, e.g., "plugins"
+
+* Version resolution is per configuration.
+
+* Configurations can depend on each other.
+
+* Tasks access dependencies via configurations.
+
+  * Gradle only downloads dependencies needed as inputs of requested tasks.
+
+---
+
+# Composite Builds
+
+Override binary dependencies with local source folders.
+
+* You might pull these in using git submodules.
+
+* Source needs to build with Gradle (even if it's a stub wrapping another build system).
+
+* Gradle plugins can be used from source this way, rather than pre-built.
+
+---
+
+# Other Bonuses
+
+* Lazy evaluation, and caching, of build scripts and parts thereof.
+
+* Process re-use (daemons) to avoid launch cost
+
+  * for Gradle itself
+
+  * for other tools like compilers
+
+* Continuous build: when finished, start again automatically if any inputs changed meanwhile
+
+* Tooling API: emits events and metadata about the build config and process
+
+ * IDE integration (mainly JVM): IntelliJ IDEA, Eclipse, NetBeans
+
+ * Gradle TestKit: automatically run sub-Gradle to test your Gradle plugins
+
+* Mature approach to introduction and deprecation of features,  
+and migration of your build scripts and plugins.
+
+---
+
+class: center, middle
+
+# Questions ...?
+
+    </textarea>
+    <script src="remark-0.15.0.min.js">
+    </script>
+    <script>
+      var slideshow = remark.create({
+        ratio: '16:9',
+        highlightLanguage: 'kotlin',
+        highlightStyle: 'tomorrow-night-bright',
+        highlightSpans: true,
+        highlightLines: true,
+      });
+    </script>
+  </body>
+</html>
