@@ -108,7 +108,7 @@ class: center, middle
 
 ???
 
-... Notes go here.
+My main aim is to get a bunch of concepts into your head for you to think about applying to your own build system, so do interrupt if you have questions or especially if you don't understand something.
 
 ---
 
@@ -138,9 +138,9 @@ Given a declaration of tasks a, b, and c ...
 
 * `a.dependsOn c; b.mustRunAfter c;` &rArr;
 
-  * `gradlew a` will run a, then c, but not b because we didn't request it; and
+  * `gradlew a` will run c, then a, but not b because we didn't request it; and
 
-  * `gradlew a b` will run a, then c, then b.
+  * `gradlew a b` will run c, then a and b in parallel.
 
 * `shouldRunAfter` is a weaker version of `mustRunAfter`: allows cycles and early parallel execution.
 
@@ -174,7 +174,7 @@ Gradle is a very rich build framework, usable and extensible with real programmi
 
 * Build scripts in dynamic (Groovy) or static (Kotlin) languages
 
-* Extensible with plugins in dynamic (Groovy) or static (Kotlin, Java) languages
+* Extensible with plugins in dynamic (Groovy) or static (Kotlin, Java) languages (or any JVM)
 
 * Extensions can be
 
@@ -186,11 +186,14 @@ Gradle is a very rich build framework, usable and extensible with real programmi
 
   * published as JARs on the Internet and/or somewhere like Artifactory
 
+* Test framework for plugins.
+
 **WARNING:** With great power comes great responsiblity.
 
 ???
 
-I've felt the pain of trying to heavily customise Ant and MSBuild builds!
+I've felt the pain of trying to heavily customise Ant and MSBuild builds!  
+Also trying to do non-trivial builds with DOS scripts or PowerShell gets messy.
 
 ---
 
@@ -228,7 +231,7 @@ If you use Gradle to manage your *build tools* as dependencies, then you don't n
 
 # Build Cache
 
-Share built outputs between multiple checkouts or users, keyed by input state.
+Share build outputs between multiple checkouts or branches, keyed by input state.
 
 * Single-user: Local directory (with auto-clean-up).
 
@@ -264,7 +267,7 @@ A key feature is downloading versioned dependencies (JAR, ZIP, etc.) from reposi
 
 * Can get essential files from one repository but metadata from another.
 
-  * Useful if published veersion has incorrect metadata.
+  * Useful if published version has incorrect metadata.
 
   * You can also override specific metadata just within your build.
 
@@ -274,11 +277,12 @@ A key feature is downloading versioned dependencies (JAR, ZIP, etc.) from reposi
 
 Declare versions in various ways
 
-* literal value: `1.2.5`
-* dynamic (prefix match): `1.2.+`
+* exact value: `1.2.5`
+* dynamic
+    * prefix match: `1.2.+`
+    * range: `[1.1, 2.0)`
+    * latest of a given Ivy XML `status` (`release`, `integration`, ...)
 * changing/snapshot
-* range: `[1.1, 2.0)`
-* latest of a given Ivy XML `status` (`release`, `integration`, ...)
 
 Write your own rules to select versions.
 
